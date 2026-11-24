@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- API 31+ system splash: same near-black canvas and launcher mark as the
+         in-app "Signal Boot" intro, so there is no colour flash at hand-off. -->
+    <style name="Theme.Sonora" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/sonora_bg</item>
+        <item name="android:statusBarColor">@color/sonora_bg</item>
+        <item name="android:navigationBarColor">@color/sonora_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/sonora_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/ic_launcher_bg</item>
+        <item name="android:windowSplashScreenAnimationDuration">200</item>
+    </style>
+</resources>

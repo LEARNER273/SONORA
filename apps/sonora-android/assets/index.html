@@ -1,0 +1,1760 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>SONORA — Professional Mobile DAW</title>
+  <meta name="theme-color" content="#06060a" />
+  <link rel="stylesheet" href="sonora.css" />
+  <style>
+    /* SONORA v1 additions (scoped, on top of the sonora.css design system) */
+    .no-native-banner {
+      display: none;
+      background: rgba(220, 38, 38, 0.15);
+      border: 1px solid rgba(220, 38, 38, 0.5);
+      color: #fecaca;
+      font-size: 0.75rem;
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin: 8px 12px 0;
+      text-align: center;
+    }
+    .no-native-banner.show { display: block; }
+    .sonora-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(15, 18, 32, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      color: var(--text-0, #f1f5f9);
+      font-size: 0.78rem;
+      padding: 10px 16px;
+      border-radius: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 999;
+      max-width: 86vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sonora-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .sonora-toast.error { border-color: rgba(220, 38, 38, 0.55); color: #fecaca; }
+    .playhead-cursor {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, #22d3ee, #a78bfa);
+      box-shadow: 0 0 8px rgba(34, 211, 238, 0.8);
+      pointer-events: none;
+      z-index: 5;
+    }
+    .loop-region {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-left: 1px solid rgba(167, 139, 250, 0.6);
+      border-right: 1px solid rgba(167, 139, 250, 0.6);
+      background: rgba(167, 139, 250, 0.07);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .pan-bar { height: 6px; border-radius: 3px; background: var(--bg-3, #1e293b); position: relative; margin: 4px 8px 10px; cursor: pointer; }
+    .pan-thumb { position: absolute; top: -3px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent-cyan, #22d3ee); transform: translateX(-50%); }
+    .strip-db { font-size: 0.62rem; color: var(--text-2, #94a3b8); text-align: center; height: 14px; }
+    .mixer-strip.disabled { opacity: 0.45; }
+    .export-log { font-size: 0.7rem; color: var(--text-2, #94a3b8); font-family: monospace; max-height: 140px; overflow-y: auto; }
+    .export-log div { padding: 3px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.08); word-break: break-all; }
+    .project-row { cursor: pointer; }
+    .piano-roll-canvas { width: 100%; height: 220px; border-radius: 10px; background: #0a0d18; display: block; }
+    .lib-item { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(148, 163, 184, 0.08); font-size: 0.8rem; }
+    .lib-item span:first-child { color: var(--text-1, #e2e8f0); font-weight: 600; }
+    .lib-item span:last-child { color: var(--text-2, #94a3b8); }
+    .btn-export[disabled] { opacity: 0.5; }
+
+    /* ── Boot intro — "Signal Boot" (≈5 s, tap to skip) ───────────────── */
+    .sonora-boot {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      touch-action: none;
+      background: radial-gradient(ellipse 130% 85% at 50% 42%, #0c1224 0%, #06060a 58%, #030305 100%);
+      transition: opacity 0.42s ease, transform 0.42s ease;
+      will-change: opacity, transform;
+    }
+    .sonora-boot.boot-exit { opacity: 0; transform: scale(1.035); pointer-events: none; }
+    .sonora-boot::before {
+      content: '';
+      position: absolute;
+      inset: -20%;
+      background-image:
+        linear-gradient(rgba(34, 211, 238, 0.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(167, 139, 250, 0.045) 1px, transparent 1px);
+      background-size: 44px 44px;
+      -webkit-mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 68%);
+      mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 68%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .sonora-boot.boot-run::before { animation: bootGrid 1.2s ease 0.1s forwards; }
+    @keyframes bootGrid { to { opacity: 1; } }
+
+    .boot-stage {
+      position: relative;
+      width: min(84vw, 540px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .boot-visual { position: relative; width: 100%; height: 150px; margin-bottom: 30px; }
+    .boot-eq {
+      position: absolute;
+      inset: 0 5% 8px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 5px;
+    }
+    .boot-eq i {
+      display: block;
+      flex: 1 1 0;
+      max-width: 7px;
+      height: var(--h, 40%);
+      border-radius: 3px 3px 1px 1px;
+      background: linear-gradient(180deg, #f472b6 0%, #a78bfa 46%, #22d3ee 100%);
+      transform: scaleY(0.02);
+      transform-origin: 50% 100%;
+      opacity: 0;
+    }
+    .sonora-boot.boot-run .boot-eq i {
+      animation: bootBar 0.9s cubic-bezier(0.2, 0.75, 0.25, 1) forwards;
+      animation-delay: var(--d, 0.4s);
+    }
+    @keyframes bootBar {
+      0%   { transform: scaleY(0.02); opacity: 0; }
+      30%  { opacity: 1; }
+      72%  { transform: scaleY(1.05); opacity: 1; }
+      100% { transform: scaleY(1); opacity: 0.92; }
+    }
+    .boot-line {
+      position: absolute;
+      left: 2%;
+      right: 2%;
+      bottom: 6px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.9) 25%, rgba(167, 139, 250, 0.9) 75%, transparent);
+      box-shadow: 0 0 14px rgba(34, 211, 238, 0.35);
+      transform: scaleX(0);
+    }
+    .sonora-boot.boot-run .boot-line { animation: bootLine 0.55s ease-out 0.05s forwards; }
+    @keyframes bootLine { to { transform: scaleX(1); } }
+    .boot-wave {
+      position: absolute;
+      left: 4%;
+      top: 16px;
+      width: 92%;
+      height: 112px;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .boot-wave path {
+      fill: none;
+      stroke: url(#bootWaveGrad);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      opacity: 0;
+    }
+    .sonora-boot.boot-run .boot-wave path {
+      animation: bootWave 1.15s cubic-bezier(0.4, 0, 0.2, 1) 1.15s forwards;
+    }
+    @keyframes bootWave {
+      0%   { opacity: 0; stroke-dashoffset: 1; }
+      12%  { opacity: 0.95; }
+      100% { opacity: 0.95; stroke-dashoffset: 0; }
+    }
+    .boot-word {
+      position: relative;
+      font-family: var(--font-display, system-ui, sans-serif);
+      font-size: clamp(2.5rem, 10vw, 3.6rem);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.2em;
+      padding-left: 0.2em;
+      color: #e8ecf8;
+      user-select: none;
+    }
+    .boot-word span {
+      display: inline-block;
+      background-image: linear-gradient(100deg, #22d3ee, #a78bfa 48%, #f472b6);
+      background-size: 600% 100%;
+      background-position: calc(var(--i, 0) * 20%) 0;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    .sonora-boot.boot-run .boot-word span {
+      animation: bootLetter 0.62s cubic-bezier(0.2, 0.75, 0.25, 1) forwards;
+      animation-delay: calc(1.95s + var(--i, 0) * 0.055s);
+    }
+    @keyframes bootLetter {
+      0%   { opacity: 0; transform: translateY(16px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .boot-word::after {
+      content: '';
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      bottom: -16px;
+      height: 30px;
+      background: radial-gradient(ellipse at center, rgba(34, 211, 238, 0.34), transparent 70%);
+      opacity: 0;
+      transform: scaleX(0.6);
+      pointer-events: none;
+    }
+    .sonora-boot.boot-run .boot-word::after { animation: bootGlow 1.5s ease 2.4s forwards; }
+    @keyframes bootGlow {
+      0%   { opacity: 0; transform: scaleX(0.6); }
+      55%  { opacity: 1; }
+      100% { opacity: 0.5; transform: scaleX(1); }
+    }
+    .boot-tag {
+      margin-top: 22px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.46em;
+      padding-left: 0.46em;
+      text-transform: uppercase;
+      color: #98a1b8;
+      opacity: 0;
+    }
+    .sonora-boot.boot-run .boot-tag { animation: bootFade 0.7s ease 3.15s forwards; }
+    @keyframes bootFade { to { opacity: 1; } }
+    .boot-hint {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 36px;
+      text-align: center;
+      font-size: 0.56rem;
+      letter-spacing: 0.34em;
+      padding-left: 0.34em;
+      text-transform: uppercase;
+      color: rgba(148, 163, 184, 0.55);
+      opacity: 0;
+    }
+    .sonora-boot.boot-run .boot-hint { animation: bootFade 0.6s ease 1.5s forwards; }
+    @media (prefers-reduced-motion: reduce) {
+      .sonora-boot::before,
+      .sonora-boot * { animation: none !important; }
+      .sonora-boot .boot-line { transform: scaleX(1); }
+      .sonora-boot .boot-eq i { transform: scaleY(1); opacity: 0.8; }
+      .sonora-boot .boot-word span { opacity: 1; transform: none; }
+      .sonora-boot .boot-tag { opacity: 1; }
+      .sonora-boot .boot-hint { opacity: 0; }
+      .sonora-boot .boot-wave path { opacity: 0.8; stroke-dashoffset: 0; }
+      .sonora-boot .boot-word::after { opacity: 0.5; transform: scaleX(1); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Boot intro — "Signal Boot" (≈5 s, tap to skip). Decorative only. -->
+  <div id="sonoraBoot" class="sonora-boot" aria-hidden="true">
+    <div class="boot-stage">
+      <div class="boot-visual">
+        <div id="bootEq" class="boot-eq"></div>
+        <svg class="boot-wave" viewBox="0 0 600 140" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="bootWaveGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#22d3ee" />
+              <stop offset="0.55" stop-color="#a78bfa" />
+              <stop offset="1" stop-color="#f472b6" />
+            </linearGradient>
+          </defs>
+          <path pathLength="1" d="M0,70 C18,70 26,50 40,50 S64,100 82,100 S106,42 126,42 S150,106 168,106 S192,56 210,56 S236,34 252,34 S274,112 294,112 S318,46 338,46 S360,94 380,94 S402,28 424,28 S448,104 470,104 S492,56 512,56 S534,84 552,84 S576,62 600,62" />
+        </svg>
+        <div class="boot-line"></div>
+      </div>
+      <div id="bootWord" class="boot-word">SONORA</div>
+      <div class="boot-tag">Professional Mobile DAW</div>
+    </div>
+    <div class="boot-hint">Tap to skip</div>
+  </div>
+  <script>
+    // Build the intro's EQ bars and wordmark before first paint so the
+    // sequence never flashes an unstyled wordmark.
+    (function () {
+      var boot = document.getElementById('sonoraBoot');
+      if (!boot) return;
+      var seen = false;
+      try { seen = sessionStorage.getItem('sonora_boot_seen') === '1'; } catch (e) {}
+      if (seen) { boot.style.display = 'none'; return; }
+
+      var heights = [30, 52, 40, 68, 48, 78, 58, 88, 66, 94, 74, 88, 96, 86, 90, 72, 84, 60, 74, 50, 64, 42, 54, 36, 44, 28];
+      var eq = document.getElementById('bootEq');
+      var mid = (heights.length - 1) / 2;
+      for (var i = 0; i < heights.length; i++) {
+        var bar = document.createElement('i');
+        bar.style.setProperty('--h', heights[i] + '%');
+        bar.style.setProperty('--d', (0.32 + Math.abs(i - mid) * 0.028).toFixed(3) + 's');
+        eq.appendChild(bar);
+      }
+
+      var word = document.getElementById('bootWord');
+      var text = word.textContent;
+      word.textContent = '';
+      for (var j = 0; j < text.length; j++) {
+        var span = document.createElement('span');
+        span.textContent = text.charAt(j);
+        span.style.setProperty('--i', j);
+        word.appendChild(span);
+      }
+    })();
+  </script>
+  <div class="app-container">
+    <div id="noNativeBanner" class="no-native-banner">
+      Native audio engine not loaded — open this page inside the SONORA Android app. All controls are disabled here.
+    </div>
+
+    <!-- Header & Transport Bar -->
+    <header class="transport-bar">
+      <div class="brand-section">
+        <span class="brand-title">SONORA</span>
+        <span id="projectNameDisplay" class="project-title">—</span>
+      </div>
+
+      <div class="transport-controls">
+        <button id="btnPlay" class="btn-transport" title="Play">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        </button>
+        <button id="btnPause" class="btn-transport" title="Pause">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+        </button>
+        <button id="btnStop" class="btn-transport" title="Stop">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14"></rect></svg>
+        </button>
+
+        <div class="tempo-box">
+          <span>BPM</span>
+          <input id="bpmInput" type="number" min="30" max="300" value="120" />
+        </div>
+
+        <button id="btnMetronome" class="nav-tab" style="padding: 6px 10px;">
+          <span>Metro</span>
+        </button>
+
+        <button id="btnLoop" class="nav-tab active" style="padding: 6px 10px;">
+          <span>Loop</span>
+        </button>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnSave" class="btn-primary" style="padding: 6px 14px; font-size: 0.8rem; background: var(--bg-3);">Save</button>
+        <button id="btnExportNav" class="btn-primary" style="padding: 6px 14px; font-size: 0.8rem;">Export</button>
+      </div>
+    </header>
+
+    <!-- Visualizer & Meter Strip -->
+    <div class="visualizer-strip">
+      <canvas id="scopeCanvas" class="visualizer-canvas"></canvas>
+      <div class="meter-display">
+        <span style="font-size: 0.65rem; color: var(--text-2);">L</span>
+        <div class="meter-bar"><div id="meterL" class="meter-fill"></div></div>
+        <span style="font-size: 0.65rem; color: var(--text-2); margin-left: 4px;">R</span>
+        <div class="meter-bar"><div id="meterR" class="meter-fill"></div></div>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 700;" id="playheadTime">00:00.000</div>
+    </div>
+
+    <!-- Studio Navigation Tabs -->
+    <nav class="studio-nav" id="studioNav">
+      <button class="nav-tab active" data-screen="arrangement">Arrangement</button>
+      <button class="nav-tab" data-screen="piano">Piano</button>
+      <button class="nav-tab" data-screen="guitar">Guitar</button>
+      <button class="nav-tab" data-screen="bass">Bass</button>
+      <button class="nav-tab" data-screen="synth">Synth Lab</button>
+      <button class="nav-tab" data-screen="drums">Drum Machine</button>
+      <button class="nav-tab" data-screen="pianoroll">Piano Roll</button>
+      <button class="nav-tab" data-screen="mixer">Mixer</button>
+      <button class="nav-tab" data-screen="mastering">Mastering Lab</button>
+      <button class="nav-tab" data-screen="recording">Recording</button>
+      <button class="nav-tab" data-screen="projects">Projects</button>
+      <button class="nav-tab" data-screen="library">Sound Library</button>
+      <button class="nav-tab" data-screen="export">Export Center</button>
+      <button class="nav-tab" data-screen="settings">Settings</button>
+    </nav>
+
+    <!-- Studio Main Viewport -->
+    <main class="studio-viewport" id="viewport">
+      <!-- 1. Arrangement Studio -->
+      <section id="screen-arrangement" class="screen-view active">
+        <div class="timeline-view" id="timelineView">
+          <div class="timeline-ruler" id="timelineRuler"></div>
+          <!-- Track rows are rendered from the live session -->
+        </div>
+      </section>
+
+      <!-- 2. Piano Instrument Screen -->
+      <section id="screen-piano" class="screen-view">
+        <div class="piano-screen">
+          <div class="instrument-topbar">
+            <div class="preset-selector">
+              <span style="font-weight: 700; color: var(--text-1);">Preset:</span>
+              <select id="pianoPresetSelect">
+                <option value="grand">Grand Piano</option>
+                <option value="soft">Soft Piano</option>
+                <option value="bright">Bright Piano</option>
+                <option value="electric">Electric Piano</option>
+                <option value="cinematic">Cinematic Piano</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button id="pianoOctaveDown" class="btn-transport" style="border-radius: 8px; width: 44px; height: 32px;">−8va</button>
+              <button id="pianoOctaveUp" class="btn-transport" style="border-radius: 8px; width: 44px; height: 32px;">+8va</button>
+              <button id="pianoSustain" class="nav-tab">Sustain</button>
+            </div>
+          </div>
+
+          <div class="keyboard-container" id="pianoKeyboard">
+            <div class="keyboard-scroll" id="keyboardScroll"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Guitar Instrument Screen -->
+      <section id="screen-guitar" class="screen-view">
+        <div class="instrument-topbar">
+          <div class="preset-selector">
+            <span style="font-weight: 700; color: var(--text-1);">Guitar:</span>
+            <select id="guitarPresetSelect">
+              <option value="acoustic">Acoustic Guitar</option>
+              <option value="cleanelectric">Clean Electric</option>
+              <option value="warmelectric">Warm Electric</option>
+              <option value="rock">Rock Guitar</option>
+              <option value="ambient">Ambient Guitar</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="nav-tab chord-btn" data-chord="C">C</button>
+            <button class="nav-tab chord-btn" data-chord="G">G</button>
+            <button class="nav-tab chord-btn" data-chord="Am">Am</button>
+            <button class="nav-tab chord-btn" data-chord="F">F</button>
+          </div>
+        </div>
+
+        <div class="guitar-fretboard" id="guitarFretboard">
+          <div class="guitar-string" data-string="0" data-note="64"><div class="guitar-wire"></div></div>
+          <div class="guitar-string" data-string="1" data-note="59"><div class="guitar-wire"></div></div>
+          <div class="guitar-string" data-string="2" data-note="55"><div class="guitar-wire"></div></div>
+          <div class="guitar-string" data-string="3" data-note="50"><div class="guitar-wire"></div></div>
+          <div class="guitar-string" data-string="4" data-note="45"><div class="guitar-wire"></div></div>
+          <div class="guitar-string" data-string="5" data-note="40"><div class="guitar-wire"></div></div>
+        </div>
+      </section>
+
+      <!-- 4. Bass Instrument Screen -->
+      <section id="screen-bass" class="screen-view">
+        <div class="instrument-topbar">
+          <div class="preset-selector">
+            <span style="font-weight: 700; color: var(--text-1);">Bass Preset:</span>
+            <select id="bassPresetSelect">
+              <option value="electric">Electric Bass</option>
+              <option value="sub">Sub Bass</option>
+              <option value="synth">Synth Bass</option>
+              <option value="e808">808 Bass</option>
+            </select>
+          </div>
+          <span style="color: var(--text-2); font-size: 0.75rem;">E1 — E3 · monophonic</span>
+        </div>
+        <div class="keyboard-container" id="bassKeyboard">
+          <div class="keyboard-scroll" id="bassKeyboardScroll"></div>
+        </div>
+      </section>
+
+      <!-- 5. Synthesizer Laboratory -->
+      <section id="screen-synth" class="screen-view">
+        <div class="instrument-topbar">
+          <div class="preset-selector">
+            <span style="font-weight: 700; color: var(--text-1);">Synth Preset:</span>
+            <select id="synthPresetSelect">
+              <option value="pluto">Pluto Lead</option>
+              <option value="nebula">Nebula Pad</option>
+              <option value="stardust">Stardust Pluck</option>
+              <option value="voyager">Voyager Bass</option>
+            </select>
+          </div>
+        </div>
+        <div class="glass-panel" style="padding: 16px;">
+          <div>
+            <h4 style="margin-bottom: 4px; color: var(--accent-violet);">LFO Modulation</h4>
+            <div style="display: flex; gap: 12px; margin-top: 10px;">
+              <div><label style="font-size: 0.7rem;">Rate (Hz)</label><input id="lfoRate" type="range" min="0.1" max="10" step="0.1" value="2.0" /></div>
+              <div><label style="font-size: 0.7rem;">Depth</label><input id="lfoDepth" type="range" min="0" max="1" step="0.01" value="0.2" /></div>
+            </div>
+          </div>
+          <p style="margin-top: 10px; font-size: 0.72rem; color: var(--text-2);">
+            ADSR envelopes are managed by the selected synth preset.
+          </p>
+        </div>
+        <div class="keyboard-container" style="margin-top: 12px;">
+          <div class="keyboard-scroll" id="synthKeyboardScroll"></div>
+        </div>
+      </section>
+
+      <!-- 6. Drum Machine Screen -->
+      <section id="screen-drums" class="screen-view">
+        <div class="instrument-topbar">
+          <div class="preset-selector">
+            <span style="font-weight: 700; color: var(--text-1);">Kit:</span>
+            <select id="drumKitSelect">
+              <option value="studio">Studio Kit</option>
+              <option value="trap">Trap 808</option>
+              <option value="acoustic">Acoustic Kit</option>
+              <option value="hiphop">Hip-Hop Kit</option>
+              <option value="electronic">Electronic</option>
+              <option value="lofi">Lo-Fi Kit</option>
+            </select>
+          </div>
+          <button id="btnClearDrums" class="nav-tab">Clear Pattern</button>
+        </div>
+
+        <div class="drum-grid" id="drumGrid"></div>
+      </section>
+
+      <!-- 7. Piano Roll (read-only viewer) -->
+      <section id="screen-pianoroll" class="screen-view">
+        <div class="instrument-topbar">
+          <div class="preset-selector">
+            <span style="font-weight: 700; color: var(--text-1);">Track:</span>
+            <select id="pianoRollTrackSelect"></select>
+          </div>
+          <span style="color: var(--text-2); font-size: 0.75rem;">Note editing arrives in a later build</span>
+        </div>
+        <div class="glass-panel" style="padding: 12px; margin: 10px;">
+          <canvas id="pianoRollCanvas" class="piano-roll-canvas" width="800" height="220"></canvas>
+        </div>
+      </section>
+
+      <!-- 8. Mixer Screen -->
+      <section id="screen-mixer" class="screen-view">
+        <div class="mixer-container" id="mixerContainer"></div>
+      </section>
+
+      <!-- 9. Mastering Laboratory -->
+      <section id="screen-mastering" class="screen-view">
+        <div class="mastering-grid">
+          <div class="glass-panel" style="padding: 16px;">
+            <h4 style="margin-bottom: 8px; color: var(--accent-cyan);">Master Spectrum Analyzer</h4>
+            <canvas id="fftCanvas" width="640" height="160" style="width: 100%; height: 160px; border-radius: 10px; background: #0a0d18; display: block;"></canvas>
+          </div>
+          <div class="glass-panel" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+            <h4 style="color: var(--accent-violet);">Loudness & Peak Telemetry</h4>
+            <div>True Peak: <span style="font-weight: 700; color: var(--text-0);" id="valTruePeak">-inf dBFS</span></div>
+            <div>RMS Level: <span style="font-weight: 700; color: var(--text-0);" id="valRms">-inf dBFS</span></div>
+            <div>Lookahead Limiter Ceiling: <span style="font-weight: 700; color: var(--accent-cyan);">-0.3 dBFS</span></div>
+            <div>Integrated LUFS: <span style="font-weight: 700; color: var(--text-0);" id="valLufs">— (not metered yet)</span></div>
+            <div style="font-size: 0.75rem; color: var(--text-2);" id="streamInfoText">AAudio low-latency output</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10. Export Center -->
+      <section id="screen-export" class="screen-view">
+        <div style="max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;">
+          <div class="glass-panel" style="padding: 20px;">
+            <h3 style="color: var(--accent-cyan); margin-bottom: 6px;">Render Full-Song WAV</h3>
+            <p style="font-size: 0.8rem; color: var(--text-1); margin-bottom: 12px;">
+              Offline-renders all tracks, clips, mixer processing and master effects to a stereo WAV file in app storage (exports/).
+            </p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button id="btnExportWav16" class="btn-primary btn-export">Export 16-bit WAV</button>
+              <button id="btnExportWav24" class="btn-primary btn-export" style="background: var(--bg-3); color: #fff;">Export 24-bit WAV</button>
+              <button id="btnExportWav32" class="btn-primary btn-export" style="background: var(--bg-3); color: #fff;">Export 32-bit Float</button>
+            </div>
+          </div>
+
+          <div class="glass-panel" style="padding: 20px;">
+            <h3 style="color: var(--accent-violet); margin-bottom: 6px;">Export Standard MIDI File</h3>
+            <p style="font-size: 0.8rem; color: var(--text-1); margin-bottom: 12px;">
+              Generates a multi-track Standard MIDI File with tempo and one channel per instrument.
+            </p>
+            <button id="btnExportMidi" class="btn-primary btn-export" style="background: var(--accent-violet); color: #000;">Export .MID</button>
+          </div>
+
+          <div class="glass-panel" style="padding: 20px;">
+            <h3 style="color: var(--accent-magenta); margin-bottom: 6px;">Export Track Stems</h3>
+            <p style="font-size: 0.8rem; color: var(--text-1); margin-bottom: 12px;">
+              Renders each track to its own 16-bit WAV file (one stem per instrument).
+            </p>
+            <button id="btnExportStems" class="btn-primary btn-export" style="background: var(--accent-magenta); color: #000;">Export Stems</button>
+          </div>
+
+          <div class="glass-panel" style="padding: 20px;">
+            <h3 style="margin-bottom: 6px;">Export Log</h3>
+            <p style="font-size: 0.8rem; color: var(--text-1); margin-bottom: 12px;">
+              Files are written under the app's exports directory. Use a file manager or USB to copy them off-device.
+            </p>
+            <div id="exportLog" class="export-log"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11. Projects Screen -->
+      <section id="screen-projects" class="screen-view">
+        <div class="glass-panel" style="padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3>Saved Projects</h3>
+            <button id="btnSave2" class="btn-primary" style="background: var(--bg-3);">Save Current</button>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <input id="newProjectName" type="text" placeholder="New project name" style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(148,163,184,0.25); background: var(--bg-2); color: var(--text-0);" />
+            <button id="btnNewProject" class="btn-primary">+ New Project</button>
+          </div>
+          <div id="projectList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+      </section>
+
+      <!-- 12. Recording Screen -->
+      <section id="screen-recording" class="screen-view">
+        <div class="glass-panel" style="padding: 24px; text-align: center; max-width: 500px; margin: 20px auto;">
+          <h3 style="color: var(--danger); margin-bottom: 8px;">Microphone Recording Booth</h3>
+          <p style="font-size: 0.8rem; color: var(--text-1); margin-bottom: 20px;">
+            Microphone capture is planned for a later build — the audio input stream is not wired to the engine yet.
+            Recording, overdub and take-comping will land together with the audio-track system.
+          </p>
+          <button id="btnBoothRec" class="btn-transport rec" style="width: 72px; height: 72px; margin: 0 auto; opacity: 0.35;" disabled>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"></circle></svg>
+          </button>
+          <div style="margin-top: 16px; font-weight: 700; color: var(--text-2);" id="recStatusText">Not available in this build</div>
+        </div>
+      </section>
+
+      <!-- 13. Sound Library -->
+      <section id="screen-library" class="screen-view">
+        <div class="glass-panel" style="padding: 20px; max-width: 600px; margin: 0 auto;">
+          <h3 style="margin-bottom: 12px;">Sound Library — Engine Inventory</h3>
+          <p style="font-size: 0.78rem; color: var(--text-2); margin-bottom: 10px;">
+            Every preset below ships inside the Rust audio engine. Select them from each instrument screen.
+          </p>
+          <div id="libraryList"></div>
+        </div>
+      </section>
+
+      <!-- 14. Settings Screen -->
+      <section id="screen-settings" class="screen-view">
+        <div class="glass-panel" style="padding: 20px; max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px;">
+          <h3>Studio Settings</h3>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Requested Sample Rate</span>
+            <span style="font-weight: 700; color: var(--accent-cyan);">48,000 Hz</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Device Sample Rate</span>
+            <span id="settingsDeviceRate" style="font-weight: 700; color: var(--accent-cyan);">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Audio Backend</span>
+            <span style="font-weight: 700; color: var(--accent-violet);">Android AAudio (Exclusive, Low-Latency)</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Offline First Architecture</span>
+            <span style="font-weight: 700; color: var(--success);">No INTERNET Permission</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Session ID</span>
+            <span id="settingsSessionId" style="font-weight: 700; color: var(--text-0); font-size: 0.75rem;">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Version</span>
+            <span style="font-weight: 700; color: var(--text-0);">SONORA 1.0.0</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="sonoraToast" class="sonora-toast"></div>
+
+  <script>
+    'use strict';
+
+    // ------------------------------------------------------------------------
+    // Native bridge — the ONLY audio path. No web-audio fallback: this page is
+    // the control surface of the Rust engine running behind the WebView.
+    // ------------------------------------------------------------------------
+    const NATIVE = window.SonoraNative || null;
+    const HAS_NATIVE = !!(NATIVE && typeof NATIVE.getSessionJson === 'function');
+    if (!HAS_NATIVE) {
+      document.getElementById('noNativeBanner').classList.add('show');
+    }
+
+    const TPB = 960;                 // ticks per beat (engine constant)
+    const BAR_PX = 96;               // arrangement pixels per bar
+    const RISER_BARS = 8;            // arrangement ruler length
+
+    const state = {
+      session: null,                 // parsed SongSession (mirror of engine truth)
+      playing: false,
+      octave: 0,
+      sustain: false,
+      metronome: false,
+      loopOn: true,
+      drumClipIdx: 0,                // index of the active drum-pattern clip
+      exporting: false,
+      currentProjectPath: null,
+      activeScreen: 'arrangement',
+      peakHoldL: 0, peakHoldR: 0,
+      lastWave: null, lastFft: null,
+      deviceRate: 0,
+      introActive: false,            // true while the boot intro overlay is up
+    };
+
+    const TRACK_ORDER = ['piano', 'drums', 'bass', 'synth', 'guitar']; // instrument slot per track type
+    const DRUM_CHANNELS = ['Kick', 'Snare', 'Closed Hat', 'Open Hat', 'Hi Tom', 'Low Tom', 'Crash', 'Clap'];
+
+    // ------------------------------------------------------------------------
+    // Small utilities
+    // ------------------------------------------------------------------------
+    const $ = (id) => document.getElementById(id);
+
+    let toastTimer = null;
+    function toast(msg, isErr) {
+      const el = $('sonoraToast');
+      el.textContent = msg;
+      el.classList.toggle('error', !!isErr);
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+    }
+
+    function ticksPerBar() {
+      const num = (state.session && state.session.time_signature) ? state.session.time_signature.numerator : 4;
+      return TPB * num;
+    }
+
+    function ticksToSeconds(ticks) {
+      const bpm = state.session ? state.session.bpm : 120;
+      return (ticks / TPB) * (60.0 / bpm);
+    }
+
+    function fmtTime(seconds) {
+      if (!isFinite(seconds) || seconds < 0) seconds = 0;
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      const ms = Math.floor((seconds - Math.floor(seconds)) * 1000);
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + '.' + String(ms).padStart(3, '0');
+    }
+
+    function dbfs(linear) {
+      return linear > 1e-6 ? (20 * Math.log10(linear)) : -Infinity;
+    }
+
+    function dbLabel(db) {
+      if (!isFinite(db)) return '-∞ dB';
+      return (db >= 0 ? '+' : '') + db.toFixed(1) + ' dB';
+    }
+
+    function parseJsonSafe(text, fallback) {
+      try { return JSON.parse(text); } catch (e) { return fallback; }
+    }
+
+    function trackIndexOf(type) {
+      if (!state.session) return -1;
+      return state.session.tracks.findIndex(t => t.track_type === type);
+    }
+
+    // ------------------------------------------------------------------------
+    // Session sync (engine session is the source of truth)
+    // ------------------------------------------------------------------------
+    function refreshSession() {
+      if (!HAS_NATIVE) return;
+      const text = NATIVE.getSessionJson();
+      const session = parseJsonSafe(text, null);
+      if (!session || !Array.isArray(session.tracks)) return;
+      state.session = session;
+
+      $('projectNameDisplay').textContent = session.name;
+      $('bpmInput').value = Math.round(session.bpm);
+      state.loopOn = !!session.loop_enabled;
+      $('btnLoop').classList.toggle('active', state.loopOn);
+      $('settingsSessionId').textContent = session.id ? session.id.slice(0, 8) : '—';
+
+      syncPresetSelects();
+      renderArrangement();
+      renderMixer();
+      syncDrumGridFromSession();
+      syncPianoRollTrackSelect();
+      renderPianoRoll();
+    }
+
+    // ------------------------------------------------------------------------
+    // Navigation
+    // ------------------------------------------------------------------------
+    document.querySelectorAll('.nav-tab[data-screen]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab[data-screen]').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        state.activeScreen = tab.getAttribute('data-screen');
+        document.querySelectorAll('.screen-view').forEach(s => s.classList.remove('active'));
+        const screenEl = $('screen-' + state.activeScreen);
+        if (screenEl) screenEl.classList.add('active');
+        if (state.activeScreen === 'projects') refreshProjectList();
+        if (state.activeScreen === 'pianoroll') renderPianoRoll();
+        if (state.activeScreen === 'mastering') updateStreamInfo();
+      });
+    });
+
+    // Header Export button jumps to the Export Center
+    $('btnExportNav').addEventListener('click', () => {
+      const tab = document.querySelector('.nav-tab[data-screen="export"]');
+      if (tab) tab.click();
+    });
+
+    // ------------------------------------------------------------------------
+    // Transport
+    // ------------------------------------------------------------------------
+    $('btnPlay').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      NATIVE.play();
+      state.playing = true;
+      $('btnPlay').classList.add('active');
+      $('btnPause').classList.remove('active');
+    });
+
+    $('btnPause').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      NATIVE.pause();
+      state.playing = false;
+      $('btnPause').classList.add('active');
+      $('btnPlay').classList.remove('active');
+    });
+
+    $('btnStop').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      NATIVE.stop();
+      state.playing = false;
+      $('btnPlay').classList.remove('active');
+      $('btnPause').classList.remove('active');
+    });
+
+    $('bpmInput').addEventListener('change', () => {
+      if (!HAS_NATIVE) return;
+      const bpm = Math.max(30, Math.min(300, parseFloat($('bpmInput').value) || 120));
+      NATIVE.setBpm(bpm);
+      if (state.session) state.session.bpm = bpm;
+      toast('Tempo: ' + bpm + ' BPM');
+    });
+
+    $('btnMetronome').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      state.metronome = !state.metronome;
+      NATIVE.setMetronome(state.metronome);
+      $('btnMetronome').classList.toggle('active', state.metronome);
+      toast('Metronome ' + (state.metronome ? 'on' : 'off'));
+    });
+
+    $('btnLoop').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      state.loopOn = !state.loopOn;
+      const start = state.session ? state.session.loop_start_bar : 0;
+      const end = state.session ? state.session.loop_end_bar : 8;
+      NATIVE.setLoop(state.loopOn, start, end);
+      $('btnLoop').classList.toggle('active', state.loopOn);
+      if (state.session) state.session.loop_enabled = state.loopOn;
+      toast('Loop ' + (state.loopOn ? 'on' : 'off'));
+    });
+
+    // ------------------------------------------------------------------------
+    // Piano keyboard (3 octaves from C3, octave shiftable)
+    // ------------------------------------------------------------------------
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const BLACK = new Set([1, 3, 6, 8, 10]);
+
+    function buildKeyboard(containerId, startNote, numKeys, trackType) {
+      const container = $(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+      const trackIdx = trackIndexOf(trackType);
+      const whiteW = 44, blackW = 28; // must match .white-key / .black-key CSS
+      let whiteIndex = 0;
+
+      for (let i = 0; i < numKeys; i++) {
+        const midi = startNote + i;
+        if (BLACK.has(midi % 12)) {
+          const black = document.createElement('div');
+          black.className = 'black-key';
+          black.dataset.note = midi;
+          // Straddle the boundary after the last added white key.
+          black.style.left = (whiteIndex * whiteW - blackW / 2) + 'px';
+          container.appendChild(black);
+          wireKey(black, trackIdx, midi);
+        } else {
+          const white = document.createElement('div');
+          white.className = 'white-key';
+          white.dataset.note = midi;
+          const oct = Math.floor(midi / 12 - 1);
+          white.textContent = NOTE_NAMES[midi % 12] + oct;
+          container.appendChild(white);
+          wireKey(white, trackIdx, midi);
+          whiteIndex++;
+        }
+      }
+      container.dataset.trackIdx = trackIdx;
+    }
+
+    function wireKey(el, trackIdx, midi) {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        el.classList.add('pressed');
+        const note = midi + state.octave * 12;
+        if (HAS_NATIVE) NATIVE.noteOn(trackIdx, note, 100);
+      });
+      const release = () => {
+        el.classList.remove('pressed');
+        if (HAS_NATIVE) NATIVE.noteOff(trackIdx, midi + state.octave * 12);
+      };
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointercancel', release);
+      el.addEventListener('pointerleave', release);
+    }
+
+    $('pianoOctaveDown').addEventListener('click', () => {
+      state.octave = Math.max(-2, state.octave - 1);
+      toast('Piano octave: ' + (state.octave >= 0 ? '+' : '') + state.octave);
+    });
+    $('pianoOctaveUp').addEventListener('click', () => {
+      state.octave = Math.min(2, state.octave + 1);
+      toast('Piano octave: ' + (state.octave >= 0 ? '+' : '') + state.octave);
+    });
+    $('pianoSustain').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      state.sustain = !state.sustain;
+      NATIVE.setSustain(state.sustain);
+      $('pianoSustain').classList.toggle('active', state.sustain);
+    });
+
+    // ------------------------------------------------------------------------
+    // Guitar (strings pluck + chord strums, auto note-off)
+    // ------------------------------------------------------------------------
+    function pluck(trackIdx, note, velocity, holdMs) {
+      if (!HAS_NATIVE || trackIdx < 0) return;
+      NATIVE.noteOn(trackIdx, note, velocity);
+      setTimeout(() => NATIVE.noteOff(trackIdx, note), holdMs || 900);
+    }
+
+    document.querySelectorAll('.guitar-string').forEach(str => {
+      str.addEventListener('pointerdown', () => {
+        pluck(trackIndexOf('guitar'), parseInt(str.dataset.note, 10), 110, 1200);
+      });
+    });
+
+    const CHORDS = {
+      'C':  [48, 55, 64],           // C3 G3 E4
+      'G':  [43, 59, 67],           // G2 B3 G4
+      'Am': [45, 57, 64],           // A2 A3 E4
+      'F':  [41, 53, 60],           // F2 F3 C4
+    };
+    document.querySelectorAll('.chord-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const notes = CHORDS[btn.dataset.chord] || [];
+        notes.forEach((n, i) => setTimeout(() => pluck(trackIndexOf('guitar'), n, 105, 1500), i * 35));
+      });
+    });
+
+    // ------------------------------------------------------------------------
+    // Drum machine (8 channels x 16 steps, session-backed pattern)
+    // ------------------------------------------------------------------------
+    function buildDrumGrid() {
+      const grid = $('drumGrid');
+      grid.innerHTML = '';
+      DRUM_CHANNELS.forEach((chName, chIdx) => {
+        const row = document.createElement('div');
+        row.className = 'drum-row';
+
+        const label = document.createElement('div');
+        label.className = 'drum-label';
+        label.textContent = chName;
+        label.addEventListener('click', () => {
+          if (HAS_NATIVE) NATIVE.triggerDrum(chIdx, 110);
+        });
+        row.appendChild(label);
+
+        for (let step = 0; step < 16; step++) {
+          const stepBtn = document.createElement('button');
+          stepBtn.className = 'step-btn' + (step % 4 === 0 ? ' beat-accent' : '');
+          stepBtn.dataset.channel = chIdx;
+          stepBtn.dataset.step = step;
+          stepBtn.addEventListener('click', () => {
+            const active = !stepBtn.classList.contains('active');
+            stepBtn.classList.toggle('active', active);
+            if (HAS_NATIVE) NATIVE.setDrumStep(state.drumClipIdx, chIdx, step, active, 100);
+            updateSessionDrumStep(chIdx, step, active);
+          });
+          row.appendChild(stepBtn);
+        }
+        grid.appendChild(row);
+      });
+    }
+
+    function updateSessionDrumStep(channel, step, active) {
+      if (!state.session) return;
+      const t = state.session.tracks.find(t => t.track_type === 'drums');
+      if (!t || !t.clips.length) return;
+      const clip = t.clips[state.drumClipIdx];
+      if (!clip || !clip.data || !clip.data.DrumPattern) return;
+      const steps = clip.data.DrumPattern.steps;
+      const idx = steps.findIndex(s => s.channel === channel && s.step === step);
+      if (active && idx < 0) steps.push({ channel, step, velocity: 100 });
+      if (!active && idx >= 0) steps.splice(idx, 1);
+    }
+
+    function syncDrumGridFromSession() {
+      const t = state.session ? state.session.tracks.find(t => t.track_type === 'drums') : null;
+      const clip = (t && t.clips && t.clips.length) ? t.clips[0] : null;
+      state.drumClipIdx = 0;
+      const activeSteps = new Set();
+      if (clip && clip.data && clip.data.DrumPattern) {
+        (clip.data.DrumPattern.steps || []).forEach(s => activeSteps.add(s.channel + ':' + s.step));
+      }
+      document.querySelectorAll('.step-btn').forEach(btn => {
+        const key = btn.dataset.channel + ':' + btn.dataset.step;
+        btn.classList.toggle('active', activeSteps.has(key));
+      });
+    }
+
+    $('btnClearDrums').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      for (let ch = 0; ch < 8; ch++) {
+        for (let step = 0; step < 16; step++) {
+          NATIVE.setDrumStep(state.drumClipIdx, ch, step, false, 100);
+        }
+      }
+      if (state.session) {
+        const t = state.session.tracks.find(t => t.track_type === 'drums');
+        if (t && t.clips[state.drumClipIdx] && t.clips[state.drumClipIdx].data.DrumPattern) {
+          t.clips[state.drumClipIdx].data.DrumPattern.steps = [];
+        }
+      }
+      syncDrumGridFromSession();
+      toast('Pattern cleared');
+    });
+
+    // ------------------------------------------------------------------------
+    // Presets (all wired to real engine presets)
+    // ------------------------------------------------------------------------
+    const PRESET_SLOTS = [
+      { selectId: 'pianoPresetSelect',  instrument: 0, type: 'piano'  },
+      { selectId: 'guitarPresetSelect', instrument: 1, type: 'guitar' },
+      { selectId: 'bassPresetSelect',   instrument: 2, type: 'bass'   },
+      { selectId: 'synthPresetSelect',  instrument: 3, type: 'synth'  },
+      { selectId: 'drumKitSelect',      instrument: 4, type: 'drums'  },
+    ];
+
+    PRESET_SLOTS.forEach(slot => {
+      $(slot.selectId).addEventListener('change', (e) => {
+        if (!HAS_NATIVE) return;
+        NATIVE.setPreset(slot.instrument, e.target.value.toLowerCase());
+        if (state.session) {
+          const t = state.session.tracks.find(t => t.track_type === slot.type);
+          if (t) t.preset_name = e.target.value.toLowerCase();
+        }
+        toast('Preset: ' + e.target.options[e.target.selectedIndex].text);
+      });
+    });
+
+    function syncPresetSelects() {
+      if (!state.session) return;
+      PRESET_SLOTS.forEach(slot => {
+        const t = state.session.tracks.find(t => t.track_type === slot.type);
+        if (t) $(slot.selectId).value = (t.preset_name || '').toLowerCase();
+      });
+    }
+
+    $('lfoRate').addEventListener('input', (e) => {
+      if (HAS_NATIVE) NATIVE.setSynthLfo(parseFloat(e.target.value), parseFloat($('lfoDepth').value));
+    });
+    $('lfoDepth').addEventListener('input', (e) => {
+      if (HAS_NATIVE) NATIVE.setSynthLfo(parseFloat($('lfoRate').value), parseFloat(e.target.value));
+    });
+
+    // ------------------------------------------------------------------------
+    // Arrangement (rendered from the live session)
+    // ------------------------------------------------------------------------
+    function renderArrangement() {
+      const view = $('timelineView');
+      view.innerHTML = '';
+
+      // Ruler
+      const ruler = document.createElement('div');
+      ruler.className = 'timeline-ruler';
+      for (let bar = 1; bar <= RISER_BARS; bar++) {
+        const mark = document.createElement('div');
+        mark.className = 'ruler-bar-mark';
+        mark.textContent = 'Bar ' + bar;
+        ruler.appendChild(mark);
+      }
+      view.appendChild(ruler);
+
+      const tpb = ticksPerBar();
+      const loop = document.createElement('div');
+      loop.className = 'loop-region';
+      loop.style.left = ((state.session ? state.session.loop_start_bar : 0) * BAR_PX) + 'px';
+      loop.style.width = (Math.max(1, (state.session ? state.session.loop_end_bar : 8) - (state.session ? state.session.loop_start_bar : 0)) * BAR_PX) + 'px';
+      view.appendChild(loop);
+
+      (state.session ? state.session.tracks : []).forEach(track => {
+        const row = document.createElement('div');
+        row.className = 'track-row';
+
+        const header = document.createElement('div');
+        header.className = 'track-header';
+        header.textContent = track.name;
+        row.appendChild(header);
+
+        const clips = document.createElement('div');
+        clips.className = 'track-clips';
+        (track.clips || []).forEach(clip => {
+          const el = document.createElement('div');
+          el.className = 'timeline-clip';
+          const left = (clip.start_tick / tpb) * BAR_PX;
+          const width = Math.max(24, (clip.duration_ticks / tpb) * BAR_PX);
+          el.style.left = left + 'px';
+          el.style.width = width + 'px';
+          let label = clip.name;
+          if (clip.data && clip.data.DrumPattern) label += ' · ' + (clip.data.DrumPattern.steps || []).length + ' steps';
+          if (clip.data && clip.data.Midi) label += ' · ' + clip.data.Midi.length + ' notes';
+          el.textContent = label;
+          clips.appendChild(el);
+        });
+        row.appendChild(clips);
+        view.appendChild(row);
+      });
+
+      // Playhead cursor
+      const cursor = document.createElement('div');
+      cursor.className = 'playhead-cursor';
+      cursor.id = 'playheadCursor';
+      cursor.style.left = '0px';
+      view.appendChild(cursor);
+    }
+
+    // ------------------------------------------------------------------------
+    // Mixer (rendered from the live session; fader = dB -60..+6)
+    // ------------------------------------------------------------------------
+    function sliderToDb(frac) { return -60 + frac * 66; }
+    function dbToSlider(db) { return Math.max(0, Math.min(1, (db + 60) / 66)); }
+
+    function renderMixer() {
+      const container = $('mixerContainer');
+      container.innerHTML = '';
+      if (!state.session) return;
+
+      state.session.tracks.forEach((track, idx) => {
+        const strip = document.createElement('div');
+        strip.className = 'mixer-strip';
+
+        const title = document.createElement('span');
+        title.className = 'mixer-title';
+        title.textContent = track.name;
+        strip.appendChild(title);
+
+        const dbLabelEl = document.createElement('div');
+        dbLabelEl.className = 'strip-db';
+        dbLabelEl.textContent = dbLabel(track.volume_db);
+        strip.appendChild(dbLabelEl);
+
+        const fader = document.createElement('div');
+        fader.className = 'fader-track';
+        const thumb = document.createElement('div');
+        thumb.className = 'fader-thumb';
+        thumb.style.bottom = (dbToSlider(track.volume_db) * 100) + '%';
+        fader.appendChild(thumb);
+        wireFader(fader, thumb, (frac) => {
+          const db = sliderToDb(frac);
+          dbLabelEl.textContent = dbLabel(db);
+          if (HAS_NATIVE) NATIVE.setTrackVolume(idx, db);
+          track.volume_db = db;
+        });
+        strip.appendChild(fader);
+
+        const pan = document.createElement('div');
+        pan.className = 'pan-bar';
+        const panThumb = document.createElement('div');
+        panThumb.className = 'pan-thumb';
+        panThumb.style.left = (50 + track.pan * 50) + '%';
+        pan.appendChild(panThumb);
+        wirePan(pan, panThumb, (p) => {
+          if (HAS_NATIVE) NATIVE.setTrackPan(idx, p);
+          track.pan = p;
+        });
+        strip.appendChild(pan);
+
+        const buttons = document.createElement('div');
+        buttons.className = 'strip-buttons';
+        const mute = document.createElement('button');
+        mute.className = 'btn-mute' + (track.muted ? ' active' : '');
+        mute.textContent = 'M';
+        mute.addEventListener('click', () => {
+          track.muted = !track.muted;
+          mute.classList.toggle('active', track.muted);
+          if (HAS_NATIVE) NATIVE.setTrackMute(idx, track.muted);
+        });
+        const solo = document.createElement('button');
+        solo.className = 'btn-solo' + (track.soloed ? ' active' : '');
+        solo.textContent = 'S';
+        solo.addEventListener('click', () => {
+          track.soloed = !track.soloed;
+          solo.classList.toggle('active', track.soloed);
+          if (HAS_NATIVE) NATIVE.setTrackSolo(idx, track.soloed);
+        });
+        buttons.appendChild(mute);
+        buttons.appendChild(solo);
+        strip.appendChild(buttons);
+        container.appendChild(strip);
+      });
+
+      // Master strip
+      const master = document.createElement('div');
+      master.className = 'mixer-strip master';
+      const mTitle = document.createElement('span');
+      mTitle.className = 'mixer-title';
+      mTitle.style.color = 'var(--accent-violet)';
+      mTitle.textContent = 'Master';
+      master.appendChild(mTitle);
+
+      const mDb = document.createElement('div');
+      mDb.className = 'strip-db';
+      mDb.textContent = dbLabel(state.session.master_volume_db);
+      master.appendChild(mDb);
+
+      const mFader = document.createElement('div');
+      mFader.className = 'fader-track';
+      const mThumb = document.createElement('div');
+      mThumb.className = 'fader-thumb';
+      mThumb.style.bottom = (dbToSlider(state.session.master_volume_db) * 100) + '%';
+      mThumb.style.borderColor = 'var(--accent-violet)';
+      mFader.appendChild(mThumb);
+      wireFader(mFader, mThumb, (frac) => {
+        const db = sliderToDb(frac);
+        mDb.textContent = dbLabel(db);
+        if (HAS_NATIVE) NATIVE.setMasterVolume(db);
+        state.session.master_volume_db = db;
+      });
+      master.appendChild(mFader);
+
+      const lim = document.createElement('span');
+      lim.style.fontSize = '0.65rem';
+      lim.style.color = 'var(--success)';
+      lim.style.fontWeight = '700';
+      lim.textContent = 'LIMITER';
+      master.appendChild(lim);
+      container.appendChild(master);
+    }
+
+    function wireFader(trackEl, thumbEl, apply) {
+      const onMove = (e) => {
+        const rect = trackEl.getBoundingClientRect();
+        const frac = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
+        thumbEl.style.bottom = (frac * 100) + '%';
+        apply(frac);
+      };
+      const onDown = (e) => {
+        e.preventDefault();
+        trackEl.setPointerCapture(e.pointerId);
+        onMove(e);
+        trackEl.addEventListener('pointermove', onMove);
+        const up = () => {
+          trackEl.removeEventListener('pointermove', onMove);
+          trackEl.removeEventListener('pointerup', up);
+          trackEl.removeEventListener('pointercancel', up);
+        };
+        trackEl.addEventListener('pointerup', up);
+        trackEl.addEventListener('pointercancel', up);
+      };
+      trackEl.addEventListener('pointerdown', onDown);
+    }
+
+    function wirePan(barEl, thumbEl, apply) {
+      const onMove = (e) => {
+        const rect = barEl.getBoundingClientRect();
+        const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const pan = (frac - 0.5) * 2;
+        thumbEl.style.left = (frac * 100) + '%';
+        apply(Math.round(pan * 100) / 100);
+      };
+      const onDown = (e) => {
+        e.preventDefault();
+        barEl.setPointerCapture(e.pointerId);
+        onMove(e);
+        barEl.addEventListener('pointermove', onMove);
+        const up = () => {
+          barEl.removeEventListener('pointermove', onMove);
+          barEl.removeEventListener('pointerup', up);
+          barEl.removeEventListener('pointercancel', up);
+        };
+        barEl.addEventListener('pointerup', up);
+        barEl.addEventListener('pointercancel', up);
+      };
+      barEl.addEventListener('pointerdown', onDown);
+    }
+
+    // ------------------------------------------------------------------------
+    // Piano roll (read-only viewer over real session notes)
+    // ------------------------------------------------------------------------
+    function syncPianoRollTrackSelect() {
+      const sel = $('pianoRollTrackSelect');
+      const prev = sel.value;
+      sel.innerHTML = '';
+      if (!state.session) return;
+      state.session.tracks.forEach((t, i) => {
+        if (t.track_type === 'drums' || t.track_type === 'audio') return;
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = t.name;
+        sel.appendChild(opt);
+      });
+      if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+      sel.onchange = () => renderPianoRoll();
+    }
+
+    function renderPianoRoll() {
+      const canvas = $('pianoRollCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!state.session) return;
+      const trackIdx = parseInt($('pianoRollTrackSelect').value || '0', 10);
+      const track = state.session.tracks[trackIdx];
+      if (!track) return;
+
+      // Collect notes of all MIDI clips on this track
+      const notes = [];
+      let maxTick = TPB * 8;
+      (track.clips || []).forEach(clip => {
+        if (clip.data && clip.data.Midi) {
+          clip.data.Midi.forEach(n => {
+            notes.push(n);
+            maxTick = Math.max(maxTick, n.start_tick + n.duration_ticks);
+          });
+        }
+      });
+
+      const lo = notes.length ? Math.min(...notes.map(n => n.note_number)) - 2 : 48;
+      const hi = notes.length ? Math.max(...notes.map(n => n.note_number)) + 2 : 84;
+      const pxPerTick = canvas.width / maxTick;
+      const rowH = canvas.height / Math.max(1, hi - lo);
+      const tpb = ticksPerBar();
+
+      // Bar grid
+      ctx.strokeStyle = 'rgba(148,163,184,0.12)';
+      for (let bar = 0; bar * tpb <= maxTick; bar++) {
+        const x = bar * tpb * pxPerTick;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+
+      // Notes
+      notes.forEach(n => {
+        const x = n.start_tick * pxPerTick;
+        const w = Math.max(3, n.duration_ticks * pxPerTick);
+        const y = canvas.height - (n.note_number - lo) * rowH - rowH;
+        ctx.fillStyle = 'rgba(34,211,238,0.85)';
+        ctx.fillRect(x, y, w, Math.max(2, rowH - 1));
+      });
+
+      // Playhead
+      const tick = state.lastTick || 0;
+      if (state.playing) {
+        const x = (tick % maxTick) * pxPerTick;
+        ctx.fillStyle = 'rgba(167,139,250,0.9)';
+        ctx.fillRect(x, 0, 2, canvas.height);
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // Visualizer: real waveform + meters + playhead from the engine
+    // ------------------------------------------------------------------------
+    const scopeCanvas = $('scopeCanvas');
+    const scopeCtx = scopeCanvas.getContext('2d');
+    scopeCanvas.width = 180;
+    scopeCanvas.height = 28;
+
+    const fftCanvas = $('fftCanvas');
+    const fftCtx = fftCanvas.getContext('2d');
+
+    function drawScope() {
+      const w = scopeCanvas.width, h = scopeCanvas.height;
+      scopeCtx.clearRect(0, 0, w, h);
+      const wave = state.lastWave;
+      if (!wave || !wave.length) return;
+      scopeCtx.beginPath();
+      scopeCtx.strokeStyle = '#22d3ee';
+      scopeCtx.lineWidth = 1.5;
+      const mid = h / 2;
+      for (let x = 0; x < w; x++) {
+        const idx = Math.floor((x / w) * wave.length);
+        const amp = Math.max(-1, Math.min(1, wave[idx])) * (mid - 2);
+        const y = mid + amp;
+        if (x === 0) scopeCtx.moveTo(x, y); else scopeCtx.lineTo(x, y);
+      }
+      scopeCtx.stroke();
+    }
+
+    function drawFft() {
+      const w = fftCanvas.width, h = fftCanvas.height;
+      fftCtx.clearRect(0, 0, w, h);
+      const fft = state.lastFft;
+      if (!fft || fft.length < 2) return;
+      const bars = 48;
+      const binCount = fft.length - 1;
+      const barW = w / bars;
+      for (let b = 0; b < bars; b++) {
+        // log-ish frequency mapping
+        const loBin = Math.floor(Math.pow(binCount, b / bars));
+        const hiBin = Math.max(loBin + 1, Math.floor(Math.pow(binCount, (b + 1) / bars)));
+        let peak = 0;
+        for (let i = loBin; i < hiBin && i < binCount; i++) peak = Math.max(peak, fft[i + 1]);
+        const level = Math.max(0, Math.min(1, peak));
+        const bh = level * (h - 8);
+        const grad = fftCtx.createLinearGradient(0, h - bh, 0, h);
+        grad.addColorStop(0, '#a78bfa');
+        grad.addColorStop(1, 'rgba(34,211,238,0.5)');
+        fftCtx.fillStyle = grad;
+        fftCtx.fillRect(b * barW + 1, h - bh, barW - 2, bh);
+      }
+    }
+
+    function pollTelemetry() {
+      if (!HAS_NATIVE || document.hidden || state.introActive) return;
+      let t = null;
+      try {
+        const raw = NATIVE.getTelemetryJson();
+        if (typeof raw === 'string' && raw.length > 2) t = JSON.parse(raw);
+      } catch (e) { return; }
+      if (!t || t.length < 5) return;
+      const peakL = t[0], peakR = t[1], rmsL = t[2], rmsR = t[3], tick = t[4];
+
+      // Meters with peak hold decay — write the DOM only when visibly changed.
+      state.peakHoldL = Math.max(peakL, state.peakHoldL * 0.86);
+      state.peakHoldR = Math.max(peakR, state.peakHoldR * 0.86);
+      const pct = (v) => Math.max(0, Math.min(100, Math.pow(v, 0.6) * 100));
+      const lPct = Math.round(pct(state.peakHoldL) * 2) / 2;
+      const rPct = Math.round(pct(state.peakHoldR) * 2) / 2;
+      if (lPct !== state.lastLPct) {
+        $('meterL').style.width = lPct + '%';
+        state.lastLPct = lPct;
+      }
+      if (rPct !== state.lastRPct) {
+        $('meterR').style.width = rPct + '%';
+        state.lastRPct = rPct;
+      }
+
+      // Playhead
+      state.lastTick = tick;
+      const seconds = ticksToSeconds(tick);
+      const timeText = fmtTime(seconds);
+      if (timeText !== state.lastTimeText) {
+        $('playheadTime').textContent = timeText;
+        state.lastTimeText = timeText;
+      }
+      const cursor = $('playheadCursor');
+      if (cursor) {
+        const tpb = ticksPerBar();
+        const loopTicks = tpb * 8;
+        const posTicks = state.session && state.session.loop_enabled ? (tick % loopTicks) : (tick % (tpb * RISER_BARS));
+        cursor.style.left = (posTicks / tpb) * BAR_PX + 'px';
+      }
+      if (state.activeScreen === 'pianoroll') renderPianoRoll();
+
+      // Drum grid: highlight the step currently playing (from the engine clock).
+      if (state.activeScreen === 'drums' && state.playing && state.session) {
+        const tpb = ticksPerBar();
+        const currentStep = Math.floor((tick % tpb) / (tpb / 16));
+        document.querySelectorAll('.step-btn').forEach(btn => {
+          btn.classList.toggle('current', parseInt(btn.dataset.step, 10) === currentStep);
+        });
+      }
+
+      // Waveform scope — only when audio is actually flowing (idle saves JNI calls).
+      if (state.playing || peakL > 0.0005 || peakR > 0.0005) {
+        try {
+          const rawWave = NATIVE.getWaveformJson();
+          if (typeof rawWave === 'string' && rawWave.length > 2) {
+            const wave = JSON.parse(rawWave);
+            if (wave && wave.length) state.lastWave = wave;
+          }
+        } catch (e) { /* engine busy — keep last */ }
+        drawScope();
+      }
+
+      // FFT only while the mastering screen is visible
+      if (state.activeScreen === 'mastering') {
+        try {
+          const rawFft = NATIVE.getFftJson();
+          if (typeof rawFft === 'string' && rawFft.length > 2) {
+            const fft = JSON.parse(rawFft);
+            if (fft && fft.length) state.lastFft = fft;
+          }
+        } catch (e) { /* keep last */ }
+        drawFft();
+        $('valTruePeak').textContent = dbLabel(dbfs(Math.max(peakL, peakR)));
+        $('valRms').textContent = dbLabel(dbfs(Math.max(rmsL, rmsR)));
+      }
+    }
+
+    function updateStreamInfo() {
+      if (!HAS_NATIVE) return;
+      const rate = NATIVE.getSampleRate();
+      state.deviceRate = rate;
+      $('streamInfoText').textContent = rate > 0
+        ? 'AAudio output · device running at ' + rate.toLocaleString() + ' Hz'
+        : 'AAudio output (stream idle)';
+      $('settingsDeviceRate').textContent = rate > 0 ? rate.toLocaleString() + ' Hz' : '—';
+    }
+
+    setInterval(pollTelemetry, 100);
+    setInterval(updateStreamInfo, 5000);
+    setInterval(() => {
+      if (HAS_NATIVE && state.currentProjectPath) NATIVE.autosave();
+    }, 60000);
+
+    // ------------------------------------------------------------------------
+    // Projects
+    // ------------------------------------------------------------------------
+    function refreshProjectList() {
+      const list = $('projectList');
+      list.innerHTML = '';
+      if (!HAS_NATIVE) return;
+      const res = parseJsonSafe(NATIVE.listProjects(), null);
+      if (!res || !res.ok) {
+        list.innerHTML = '<div style="color: var(--text-2); font-size: 0.8rem;">No project catalog available.</div>';
+        return;
+      }
+      (res.projects || []).forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'glass-panel project-row';
+        row.style.cssText = 'padding: 12px; display: flex; justify-content: space-between; align-items: center;';
+        const info = document.createElement('div');
+        const nm = document.createElement('div');
+        nm.style.fontWeight = '700';
+        nm.textContent = p.name;
+        const meta = document.createElement('div');
+        meta.style.cssText = 'font-size: 0.7rem; color: var(--text-2);';
+        meta.textContent = Math.round(p.bpm) + ' BPM · ' + p.trackCount + ' tracks · ' + new Date(p.updatedAt * 1000).toLocaleString();
+        info.appendChild(nm);
+        info.appendChild(meta);
+        row.appendChild(info);
+
+        const btn = document.createElement('button');
+        btn.className = 'nav-tab' + (p.path === state.currentProjectPath ? ' active' : '');
+        btn.textContent = p.path === state.currentProjectPath ? 'Loaded' : 'Open';
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openProjectPath(p.path);
+        });
+        row.appendChild(btn);
+        row.addEventListener('click', () => openProjectPath(p.path));
+        list.appendChild(row);
+      });
+      if (!(res.projects || []).length) {
+        list.innerHTML = '<div style="color: var(--text-2); font-size: 0.8rem;">No saved projects yet — create one above.</div>';
+      }
+    }
+
+    function openProjectPath(path) {
+      if (!HAS_NATIVE) return;
+      const res = parseJsonSafe(NATIVE.openProject(path), null);
+      if (res && res.ok) {
+        state.currentProjectPath = res.path;
+        state.playing = false;
+        $('btnPlay').classList.remove('active');
+        refreshSession();
+        toast('Opened: ' + (state.session ? state.session.name : 'project'));
+        refreshProjectList();
+      } else {
+        toast('Open failed: ' + (res && res.error ? res.error : 'unknown error'), true);
+      }
+    }
+
+    $('btnNewProject').addEventListener('click', () => {
+      if (!HAS_NATIVE) return;
+      const name = ($('newProjectName').value || '').trim() || 'Untitled ' + new Date().toLocaleTimeString();
+      const res = parseJsonSafe(NATIVE.createProject(name), null);
+      if (res && res.ok) {
+        state.currentProjectPath = res.path;
+        refreshSession();
+        refreshProjectList();
+        $('newProjectName').value = '';
+        toast('Project created: ' + name);
+      } else {
+        toast('Create failed: ' + (res && res.error ? res.error : 'unknown error'), true);
+      }
+    });
+
+    function saveCurrentProject() {
+      if (!HAS_NATIVE) return;
+      const res = parseJsonSafe(NATIVE.saveProject(), null);
+      if (res && res.ok) {
+        state.currentProjectPath = res.path;
+        toast('Saved ✓ ' + res.path.split('/').pop());
+      } else {
+        toast('Save failed: ' + (res && res.error ? res.error : 'no project open'), true);
+      }
+    }
+    $('btnSave').addEventListener('click', saveCurrentProject);
+    $('btnSave2').addEventListener('click', saveCurrentProject);
+
+    // ------------------------------------------------------------------------
+    // Exports — real offline renders, run on the Java side executor
+    // ------------------------------------------------------------------------
+    window.SonoraUI = {
+      onExportResult(type, json) {
+        state.exporting = false;
+        document.querySelectorAll('.btn-export').forEach(b => b.disabled = false);
+        const res = (typeof json === 'string') ? parseJsonSafe(json, null) : json;
+        const log = $('exportLog');
+        const entry = document.createElement('div');
+        if (res && res.ok) {
+          const paths = res.paths ? res.paths.join(', ') : res.path;
+          entry.textContent = '[' + type + '] ✓ ' + paths + (res.bytes ? ' (' + res.bytes + ' B)' : '');
+          toast(type + ' exported → ' + (res.path ? res.path.split('/').pop() : res.count + ' stems'));
+        } else {
+          entry.textContent = '[' + type + '] ✗ ' + (res && res.error ? res.error : 'failed');
+          toast(type + ' export failed', true);
+        }
+        log.prepend(entry);
+      }
+    };
+
+    function startExport(type, fn) {
+      if (!HAS_NATIVE || state.exporting) return;
+      state.exporting = true;
+      document.querySelectorAll('.btn-export').forEach(b => b.disabled = true);
+      toast('Rendering ' + type + '…');
+      try { fn(); } catch (e) {
+        state.exporting = false;
+        document.querySelectorAll('.btn-export').forEach(b => b.disabled = false);
+        toast('Export error: ' + e, true);
+      }
+    }
+
+    $('btnExportWav16').addEventListener('click', () => startExport('WAV 16-bit', () => NATIVE.exportWavAsync(0)));
+    $('btnExportWav24').addEventListener('click', () => startExport('WAV 24-bit', () => NATIVE.exportWavAsync(1)));
+    $('btnExportWav32').addEventListener('click', () => startExport('WAV 32-bit float', () => NATIVE.exportWavAsync(2)));
+    $('btnExportMidi').addEventListener('click', () => startExport('MIDI', () => NATIVE.exportMidiAsync()));
+    $('btnExportStems').addEventListener('click', () => startExport('stems', () => NATIVE.exportStemsAsync()));
+
+    // ------------------------------------------------------------------------
+    // Sound Library (engine inventory — accurate, non-interactive)
+    // ------------------------------------------------------------------------
+    const LIBRARY = [
+      ['Piano', 'grand · soft · bright · electric · cinematic'],
+      ['Guitar', 'acoustic · clean electric · warm electric · rock · ambient'],
+      ['Bass', 'electric · sub · synth · 808'],
+      ['Synth', 'pluto lead · nebula pad · stardust pluck · voyager bass'],
+      ['Drum Kits', 'studio · trap 808 · acoustic · hip-hop · electronic · lo-fi'],
+      ['Master FX', 'chorus · distortion · filter · delay · reverb · compressor · brickwall limiter'],
+    ];
+    (function buildLibrary() {
+      const list = $('libraryList');
+      LIBRARY.forEach(([name, presets]) => {
+        const row = document.createElement('div');
+        row.className = 'lib-item';
+        const a = document.createElement('span');
+        a.textContent = name;
+        const b = document.createElement('span');
+        b.textContent = presets;
+        row.appendChild(a);
+        row.appendChild(b);
+        list.appendChild(row);
+      });
+    })();
+
+    // ------------------------------------------------------------------------
+    // Boot intro ("Signal Boot") — ~5 s, tap anywhere to skip.
+    // The timeline starts after two real animation frames (the system splash
+    // lifts on the first one), so the sequence always plays in view.
+    // ------------------------------------------------------------------------
+    (function bootIntro() {
+      const boot = document.getElementById('sonoraBoot');
+      if (!boot) return;
+      let seen = false;
+      try { seen = sessionStorage.getItem('sonora_boot_seen') === '1'; } catch (e) {}
+      if (seen || boot.style.display === 'none') {
+        if (boot.parentNode) boot.parentNode.removeChild(boot);
+        return;
+      }
+      try { sessionStorage.setItem('sonora_boot_seen', '1'); } catch (e) {}
+
+      state.introActive = true;
+      let done = false;
+      let started = false;
+      const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      function endBoot() {
+        if (done) return;
+        done = true;
+        boot.classList.add('boot-exit');
+        setTimeout(() => {
+          if (boot.parentNode) boot.parentNode.removeChild(boot);
+          state.introActive = false;
+          state.lastTimeText = null;   // force the next telemetry paint
+        }, 440);
+      }
+      function begin() {
+        if (started || done) return;
+        started = true;
+        boot.classList.add('boot-run');
+        const hold = reduced ? 950 : 4580;
+        setTimeout(endBoot, hold);
+        // Failsafe relative to the real start, never before the user sees it.
+        setTimeout(() => { if (!done) endBoot(); }, hold + 2500);
+      }
+      boot.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        endBoot();
+      }, { passive: false });
+
+      // Android keeps its system splash up until the app's first frame is
+      // presented. Start the timeline only after two animation frames have
+      // been produced, then give the splash exit animation a short beat so
+      // the whole sequence plays in view instead of behind the splash.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(begin, 320);
+        });
+      });
+    })();
+
+    // ------------------------------------------------------------------------
+    // Boot
+    // ------------------------------------------------------------------------
+    buildKeyboard('keyboardScroll', 48, 36, 'piano');      // C3..C6 → track: piano
+    buildKeyboard('bassKeyboardScroll', 28, 25, 'bass');  // E1..E3 → track: bass
+    buildKeyboard('synthKeyboardScroll', 48, 36, 'synth');// C3..C6 → track: synth
+    buildDrumGrid();
+
+    if (HAS_NATIVE) {
+      refreshSession();
+      updateStreamInfo();
+      refreshProjectList();
+    } else {
+      renderArrangement();
+      renderMixer();
+    }
+  </script>
+</body>
+</html>

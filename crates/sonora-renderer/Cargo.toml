@@ -1,0 +1,11 @@
+[package]
+name = "sonora-renderer"
+version = "1.0.0"
+edition = "2021"
+authors = ["SONORA Audio Systems <dev@sonora.audio>"]
+license = "MIT"
+
+[dependencies]
+sonora-core = { path = "../sonora-core" }
+sonora-audio = { path = "../sonora-audio" }
+sonora-codecs = { path = "../sonora-codecs" }

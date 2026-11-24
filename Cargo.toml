@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sonora-core",
+    "crates/sonora-dsp",
+    "crates/sonora-instruments",
+    "crates/sonora-sequencer",
+    "crates/sonora-audio",
+    "crates/sonora-midi",
+    "crates/sonora-codecs",
+    "crates/sonora-project",
+    "crates/sonora-renderer",
+    "apps/sonora-android",
+]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,0 +1,8 @@
+[package]
+name = "sonora-instruments"
+version = "1.0.0"
+edition = "2021"
+authors = ["SONORA Audio Systems <dev@sonora.audio>"]
+license = "MIT"
+
+[dependencies]
